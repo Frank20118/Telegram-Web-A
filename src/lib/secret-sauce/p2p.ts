@@ -178,19 +178,37 @@ export async function joinPhoneCall(
   isP2p: boolean,
   onUpdate: (...args: any[]) => void,
 ) {
+  // Создаем кастомные ICE серверы
+  const customIceServers = [
+    // Рабочие TURN серверы для обхода блокировки
+    {
+      urls: [
+        'turn:turn.anyfirewall.com:443?transport=tcp',
+        'turn:turn.anyfirewall.com:3478?transport=udp'
+      ],
+      username: 'webrtc',
+      credential: 'webrtc'
+    },
+    {
+      urls: 'turn:numb.viagenie.ca:3478',
+      username: 'username',
+      credential: 'password'
+    },
+    // Оригинальные серверы Telegram
+    ...connections.map((connection) => ({
+      urls: [
+        connection.isTurn && `turn:${connection.ip}:${connection.port}`,
+        connection.isStun && `stun:${connection.ip}:${connection.port}`,
+      ].filter(Boolean),
+      username: connection.username,
+      credentialType: 'password',
+      credential: connection.password,
+    }))
+  ];
+
   const conn = new RTCPeerConnection({
-    iceServers: connections.map((connection) => (
-      {
-        urls: [
-          connection.isTurn && `turn:${connection.ip}:${connection.port}`,
-          connection.isStun && `stun:${connection.ip}:${connection.port}`,
-        ].filter(Boolean),
-        username: connection.username,
-        credentialType: 'password',
-        credential: connection.password,
-      }
-    )),
-    iceTransportPolicy: isP2p ? 'all' : 'relay',
+    iceServers: customIceServers,
+    iceTransportPolicy: 'relay', // ВАЖНО: форсируем relay
     bundlePolicy: 'max-bundle',
     iceCandidatePoolSize: ICE_CANDIDATE_POOL_SIZE,
   });
